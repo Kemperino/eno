@@ -8,9 +8,6 @@ pub enum EnoError {
     #[error("Tmux error: {0}")]
     Tmux(String),
 
-    #[error("Lock error: {0}")]
-    Lock(String),
-
     #[error("Configuration error: {0}")]
     Config(String),
 
@@ -34,9 +31,6 @@ pub enum EnoError {
 
     #[error("Agent not found: {0}")]
     AgentNotFound(usize),
-
-    #[error("Resource already locked: {resource} (held by agent {agent})")]
-    ResourceLocked { resource: String, agent: usize },
 
     #[error("Maximum agents ({0}) exceeded")]
     MaxAgentsExceeded(usize),

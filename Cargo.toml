@@ -23,7 +23,6 @@ indicatif = "0.17"
 dirs = "5.0"
 uuid = { version = "1.6", features = ["v4"] }
 which = "6.0"
-fs2 = "0.4"
 tabled = "0.15"
 
 [profile.release]

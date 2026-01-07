@@ -15,7 +15,7 @@ pub struct EnoConfig {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AgentConfig {
-    /// Tool to use (claude, codex, aider, cursor, custom)
+    /// Tool to use (claude or codex)
     pub tool: String,
 
     /// Task description
@@ -24,10 +24,6 @@ pub struct AgentConfig {
     /// Branch name (optional, auto-generated from task)
     #[serde(default)]
     pub branch: Option<String>,
-
-    /// Custom command to run (for custom tool)
-    #[serde(default)]
-    pub command: Option<String>,
 }
 
 impl EnoConfig {
@@ -44,7 +40,6 @@ pub struct AgentSpec {
     pub tool: Tool,
     pub task: String,
     pub branch: String,
-    pub command: Option<String>,
 }
 
 

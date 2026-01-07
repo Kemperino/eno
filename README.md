@@ -66,8 +66,6 @@ eno start --config eno.yaml
 | `eno attach` | Attach to the tmux session |
 | `eno send <n> <msg>` | Send message to agent n |
 | `eno broadcast <msg>` | Message all agents |
-| `eno lock acquire <resource>` | Acquire a resource lock |
-| `eno lock release <resource>` | Release a resource lock |
 | `eno cleanup` | Clean up the session |
 
 ## How It Works
@@ -137,9 +135,6 @@ agents:
 |------|---------|---------|
 | Claude | `claude` | `npm install -g @anthropic-ai/claude-code` |
 | Codex | `codex` | `npm install -g @openai/codex` |
-| Aider | `aider` | `pip install aider-chat` |
-| Cursor | `cursor` | https://cursor.sh |
-| Custom | `bash` | Any shell command |
 
 ## License
 

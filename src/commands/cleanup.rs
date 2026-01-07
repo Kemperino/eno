@@ -1,7 +1,7 @@
 use colored::Colorize;
 use dialoguer::{theme::ColorfulTheme, Confirm};
 
-use crate::context::remove_context;
+use crate::context::{remove_context, CONTEXT_FILENAME};
 use crate::error::{EnoError, Result};
 use crate::git::GitManager;
 use crate::session::SessionState;
@@ -44,7 +44,7 @@ pub fn run_cleanup(force: bool, keep_branches: bool) -> Result<()> {
     // Remove worktrees and optionally branches
     for agent in &session.agents {
         // Remove context file first
-        let _ = remove_context(&agent.worktree, "CLAUDE.md");
+        let _ = remove_context(&agent.worktree, CONTEXT_FILENAME);
 
         // Remove worktree
         print!("  Removing worktree: {} ", agent.display_name().cyan());

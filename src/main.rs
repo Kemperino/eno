@@ -34,8 +34,6 @@ fn main() {
 
         Commands::Broadcast { message } => commands::run_broadcast(message),
 
-        Commands::Lock { action } => commands::run_lock(action),
-
         Commands::Attach => commands::run_attach(),
 
         Commands::Cleanup { force, keep_branches } => commands::run_cleanup(force, keep_branches),

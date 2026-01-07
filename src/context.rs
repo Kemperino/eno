@@ -5,6 +5,9 @@ use crate::coordinator::PORT_RANGE;
 use crate::error::Result;
 use crate::session::{AgentState, SessionState};
 
+/// Context filename - use a unique name to avoid overwriting repo files
+pub const CONTEXT_FILENAME: &str = ".eno-context.md";
+
 /// Generate the context file content for an agent
 pub fn generate_context_file(agent: &AgentState, session: &SessionState) -> String {
     let port_base = agent.port_base;
@@ -59,12 +62,7 @@ pub fn generate_context_file(agent: &AgentState, session: &SessionState) -> Stri
         "2. **Docker**: Prefix all container names with `eno-{}-`\n",
         agent.id
     ));
-    content.push_str("3. **Shared resources**: Use locks before accessing:\n");
-    content.push_str("   ```bash\n");
-    content.push_str("   eno lock acquire integration-tests\n");
-    content.push_str("   # ... run tests ...\n");
-    content.push_str("   eno lock release integration-tests\n");
-    content.push_str("   ```\n\n");
+    content.push_str("3. **Stay in your lane**: Focus on your task, avoid modifying files other agents are working on\n\n");
 
     // Other agents
     if session.agents.len() > 1 {
@@ -96,9 +94,6 @@ pub fn generate_context_file(agent: &AgentState, session: &SessionState) -> Stri
         content.push_str("eno send 2 \"msg\"    # Message another agent\n");
         content.push_str("eno broadcast \"msg\" # Message all agents\n");
     }
-    content.push_str("eno lock list       # View active locks\n");
-    content.push_str("eno lock acquire <resource>  # Acquire a lock\n");
-    content.push_str("eno lock release <resource>  # Release a lock\n");
     content.push_str("```\n\n");
 
     // Environment variables

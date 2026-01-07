@@ -77,12 +77,6 @@ pub enum Commands {
         message: String,
     },
 
-    /// Manage resource locks
-    Lock {
-        #[command(subcommand)]
-        action: LockAction,
-    },
-
     /// Attach to the tmux session
     Attach,
 
@@ -112,42 +106,11 @@ pub enum Commands {
     },
 }
 
-#[derive(Subcommand)]
-pub enum LockAction {
-    /// Acquire a lock on a resource
-    Acquire {
-        /// Resource name to lock
-        resource: String,
-
-        /// Timeout in seconds (0 = no wait)
-        #[arg(short, long, default_value = "30")]
-        timeout: u64,
-    },
-
-    /// Release a lock on a resource
-    Release {
-        /// Resource name to release
-        resource: String,
-    },
-
-    /// List all active locks
-    List,
-
-    /// Forcefully steal a lock (use with caution)
-    Steal {
-        /// Resource name to steal
-        resource: String,
-    },
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Tool {
     Claude,
     Codex,
-    Aider,
-    Cursor,
-    Custom,
 }
 
 impl Tool {
@@ -156,9 +119,15 @@ impl Tool {
         match self {
             Tool::Claude => "claude",
             Tool::Codex => "codex",
-            Tool::Aider => "aider",
-            Tool::Cursor => "cursor",
-            Tool::Custom => "bash",
+        }
+    }
+
+    /// Get the full launch command with the task
+    pub fn launch_command(&self, task: &str) -> String {
+        let escaped_task = task.replace("'", "'\\''");
+        match self {
+            Tool::Claude => format!("claude --dangerously-skip-permissions '{}'", escaped_task),
+            Tool::Codex => format!("codex --dangerously-skip-permissions '{}'", escaped_task),
         }
     }
 
@@ -172,9 +141,6 @@ impl Tool {
         match self {
             Tool::Claude => "Install: npm install -g @anthropic-ai/claude-code",
             Tool::Codex => "Install: npm install -g @openai/codex",
-            Tool::Aider => "Install: pip install aider-chat",
-            Tool::Cursor => "Install: Download from https://cursor.sh",
-            Tool::Custom => "bash should be available on your system",
         }
     }
 }
@@ -192,10 +158,7 @@ impl std::str::FromStr for Tool {
         match s.to_lowercase().as_str() {
             "claude" => Ok(Tool::Claude),
             "codex" => Ok(Tool::Codex),
-            "aider" => Ok(Tool::Aider),
-            "cursor" => Ok(Tool::Cursor),
-            "custom" => Ok(Tool::Custom),
-            _ => Err(format!("Unknown tool: {}. Use claude, codex, aider, cursor, or custom", s)),
+            _ => Err(format!("Unknown tool: {}. Use claude or codex", s)),
         }
     }
 }

@@ -5,7 +5,7 @@ use dialoguer::{theme::ColorfulTheme, Input, Select};
 
 use crate::cli::Tool;
 use crate::config::{task_to_branch_name, AgentSpec, EnoConfig};
-use crate::context::{generate_context_file, inject_context};
+use crate::context::{generate_context_file, inject_context, CONTEXT_FILENAME};
 use crate::coordinator::ResourceCoordinator;
 use crate::error::{EnoError, Result};
 use crate::git::GitManager;
@@ -24,6 +24,21 @@ pub fn run_start(
     println!("\n{}", "🎵 Eno Agent Orchestrator".bold());
     println!("{}\n", "   Like the composer, minimalist and simple.".dimmed());
 
+    // Check for existing session and warn
+    if let Ok(Some(existing)) = SessionState::find_active() {
+        println!(
+            "{} Existing session found: {}",
+            "⚠".yellow(),
+            existing.id.cyan()
+        );
+        println!(
+            "  Run {} to clean it up first, or {} to attach.\n",
+            "eno cleanup".cyan(),
+            "eno attach".cyan()
+        );
+        return Err(EnoError::SessionExists(existing.id));
+    }
+
     // Determine repository path
     let repo_path = repo.unwrap_or_else(|| std::env::current_dir().unwrap());
     let repo_path = repo_path.canonicalize().map_err(|_| {
@@ -34,6 +49,9 @@ pub fn run_start(
 
     // Initialize git manager
     let git = GitManager::new(repo_path.clone())?;
+
+    // Prune any stale worktrees from previous sessions
+    git.prune_worktrees()?;
 
     // Collect agent specifications (and possibly get base_ref from config)
     let (specs, config_base_ref) = if let Some(config_path) = config {
@@ -49,7 +67,6 @@ pub fn run_start(
                     tool,
                     task: a.task,
                     branch,
-                    command: a.command,
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -148,10 +165,10 @@ pub fn run_start(
     let session = SessionState::new(session_id.clone(), repo_path, base_ref, agent_states)?;
 
     // Inject context files
-    print!("  Injecting context files (CLAUDE.md) ");
+    print!("  Injecting context files ({}) ", CONTEXT_FILENAME);
     for agent in &session.agents {
         let content = generate_context_file(agent, &session);
-        inject_context(&agent.worktree, &content, "CLAUDE.md")?;
+        inject_context(&agent.worktree, &content, CONTEXT_FILENAME)?;
     }
     println!("{}", "✓".green());
 
@@ -160,7 +177,6 @@ pub fn run_start(
 
     print!("  Creating tmux session ");
     let first_agent = &session.agents[0];
-    let first_spec = &specs[0];
     let first_env = coordinator.env_for_agent(1, &session);
 
     let first_window = WindowConfig::new(
@@ -168,18 +184,17 @@ pub fn run_start(
         first_agent.worktree.clone(),
     )
     .with_env_map(first_env)
-    .with_command(first_spec.command.clone().unwrap_or_else(|| first_agent.tool.command().to_string()));
+    .with_command(first_agent.tool.launch_command(&first_agent.task));
 
     tmux.create_session(&first_window)?;
 
     // Add remaining windows
-    for (i, agent) in session.agents.iter().skip(1).enumerate() {
-        let spec = &specs[i + 1];
+    for agent in session.agents.iter().skip(1) {
         let env = coordinator.env_for_agent(agent.id, &session);
 
         let window = WindowConfig::new(agent.display_name(), agent.worktree.clone())
             .with_env_map(env)
-            .with_command(spec.command.clone().unwrap_or_else(|| agent.tool.command().to_string()));
+            .with_command(agent.tool.launch_command(&agent.task));
 
         tmux.add_window(&window)?;
     }
@@ -241,7 +256,6 @@ fn parse_agent_spec(spec: &str) -> Result<AgentSpec> {
         tool,
         task,
         branch,
-        command: None,
     })
 }
 
@@ -249,12 +263,12 @@ fn collect_agents_interactive(count: Option<u8>) -> Result<Vec<AgentSpec>> {
     let theme = ColorfulTheme::default();
 
     // Find installed tools
-    let all_tools = [Tool::Claude, Tool::Codex, Tool::Aider, Tool::Cursor, Tool::Custom];
+    let all_tools = [Tool::Claude, Tool::Codex];
     let available: Vec<_> = all_tools.iter().filter(|t| t.is_installed()).collect();
 
     if available.is_empty() {
         return Err(EnoError::Config(
-            "No AI coding tools found. Install claude, codex, or aider first.".to_string(),
+            "No AI coding tools found. Install claude or codex first.".to_string(),
         ));
     }
 
@@ -299,24 +313,12 @@ fn collect_agents_interactive(count: Option<u8>) -> Result<Vec<AgentSpec>> {
             .interact_text()?;
 
         let branch = task_to_branch_name(&task);
-
-        let command = if tool == Tool::Custom {
-            let cmd: String = Input::with_theme(&theme)
-                .with_prompt("Command")
-                .default("bash".to_string())
-                .interact_text()?;
-            Some(cmd)
-        } else {
-            None
-        };
-
         println!("  Branch: {}", branch.dimmed());
 
         specs.push(AgentSpec {
             tool,
             task,
             branch,
-            command,
         });
     }
 

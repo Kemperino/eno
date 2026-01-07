@@ -40,9 +40,8 @@ impl ResourceCoordinator {
         env.insert("ENO_DOCKER_PREFIX".to_string(), format!("eno-{}-", agent_id));
         env.insert("COMPOSE_PROJECT_NAME".to_string(), format!("eno-agent-{}", agent_id));
 
-        // State directories
+        // State directory
         env.insert("ENO_STATE_DIR".to_string(), session.state_dir.display().to_string());
-        env.insert("ENO_LOCK_DIR".to_string(), session.locks_dir().display().to_string());
 
         // Convenience variables for common ports
         env.insert("ENO_HTTP_PORT".to_string(), port_base.to_string());

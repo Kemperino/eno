@@ -7,7 +7,7 @@ use tabled::{builder::Builder, settings::Style};
 
 use crate::coordinator::PORT_RANGE;
 use crate::error::{EnoError, Result};
-use crate::session::{LockInfo, SessionState};
+use crate::session::SessionState;
 
 pub fn run_status(watch: bool, interval: u64) -> Result<()> {
     if watch {
@@ -19,8 +19,7 @@ pub fn run_status(watch: bool, interval: u64) -> Result<()> {
 
 fn run_status_once() -> Result<()> {
     let session = SessionState::find_active()?.ok_or(EnoError::NoActiveSession)?;
-
-    print_session_status(&session)?;
+    print_session_status(&session);
     Ok(())
 }
 
@@ -31,7 +30,7 @@ fn run_status_watch(interval: u64) -> Result<()> {
 
         match SessionState::find_active() {
             Ok(Some(session)) => {
-                print_session_status(&session)?;
+                print_session_status(&session);
                 println!(
                     "\n{}",
                     format!("Refreshing every {}s... (Ctrl-C to stop)", interval).dimmed()
@@ -53,33 +52,18 @@ fn run_status_watch(interval: u64) -> Result<()> {
     }
 }
 
-fn print_session_status(session: &SessionState) -> Result<()> {
+fn print_session_status(session: &SessionState) {
     let now = Utc::now();
     let duration = now.signed_duration_since(session.created_at);
     let duration_str = format_duration(duration);
 
     println!("\n{}", "🎵 Eno Session Status".bold());
     println!();
-    println!(
-        "Session:  {}",
-        session.id.cyan()
-    );
-    println!(
-        "Repo:     {}",
-        session.repo.display().to_string().dimmed()
-    );
-    println!(
-        "Base ref: {}",
-        session.base_ref.dimmed()
-    );
-    println!(
-        "Created:  {} ago",
-        duration_str.dimmed()
-    );
-    println!(
-        "Tmux:     {}",
-        session.tmux_session.dimmed()
-    );
+    println!("Session:  {}", session.id.cyan());
+    println!("Repo:     {}", session.repo.display().to_string().dimmed());
+    println!("Base ref: {}", session.base_ref.dimmed());
+    println!("Created:  {} ago", duration_str.dimmed());
+    println!("Tmux:     {}", session.tmux_session.dimmed());
 
     // Agents table
     println!("\n{}", "Agents".bold());
@@ -111,29 +95,6 @@ fn print_session_status(session: &SessionState) -> Result<()> {
 
     let table = builder.build().with(Style::rounded()).to_string();
     println!("{}", table);
-
-    // Locks
-    let locks = LockInfo::list(&session.locks_dir())?;
-    if !locks.is_empty() {
-        println!("\n{}", "Active Locks".bold());
-
-        let mut lock_builder = Builder::new();
-        lock_builder.push_record(["Resource", "Agent", "Held For"]);
-
-        for lock in &locks {
-            let held_duration = now.signed_duration_since(lock.acquired_at);
-            lock_builder.push_record([
-                lock.resource.clone(),
-                format!("Agent {}", lock.agent_id),
-                format_duration(held_duration),
-            ]);
-        }
-
-        let lock_table = lock_builder.build().with(Style::rounded()).to_string();
-        println!("{}", lock_table);
-    }
-
-    Ok(())
 }
 
 fn format_duration(duration: chrono::Duration) -> String {
