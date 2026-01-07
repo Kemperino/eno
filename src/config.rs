@@ -43,7 +43,7 @@ pub struct AgentSpec {
 }
 
 
-/// Generate a branch name from a task description
+/// Generate a concise branch name from a task description
 pub fn task_to_branch_name(task: &str) -> String {
     let task_lower = task.to_lowercase();
 
@@ -56,32 +56,31 @@ pub fn task_to_branch_name(task: &str) -> String {
         "docs"
     } else if task_lower.contains("refactor") {
         "refactor"
-    } else if task_lower.contains("update") || task_lower.contains("upgrade") {
-        "update"
     } else {
         "feature"
     };
 
-    // Extract key words and create slug
+    // Extract key words (skip common filler words and the prefix word itself)
     let slug: String = task_lower
         .split_whitespace()
         .filter(|word| {
-            // Filter out common filler words
             !matches!(
                 *word,
-                "the" | "a" | "an" | "to" | "for" | "of" | "in" | "on" | "with" | "and" | "or"
+                "the" | "a" | "an" | "to" | "for" | "of" | "in" | "on" | "with" | "and" | "or" |
+                "fix" | "bug" | "test" | "docs" | "refactor" | "add" | "implement" | "create" |
+                "update" | "upgrade" | "new" | "make" | "ensure" | "that" | "is" | "are" | "be"
             )
         })
-        .take(4)
+        .take(3)
         .collect::<Vec<_>>()
         .join("-")
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '-')
         .collect();
 
-    // Truncate if too long
-    let slug = if slug.len() > 40 {
-        slug[..40].trim_end_matches('-').to_string()
+    // Truncate if too long (max 25 chars for slug)
+    let slug = if slug.len() > 25 {
+        slug[..25].trim_end_matches('-').to_string()
     } else {
         slug
     };
@@ -95,28 +94,35 @@ mod tests {
 
     #[test]
     fn test_task_to_branch_name() {
+        // Refactor keyword triggers refactor/ prefix, filler words removed
         assert_eq!(
             task_to_branch_name("Refactor the authentication module"),
-            "refactor/refactor-authentication-module"
+            "refactor/authentication-module"
         );
+        // Fix/bug triggers fix/ prefix
         assert_eq!(
             task_to_branch_name("Fix bug in payment processing"),
-            "fix/fix-bug-payment-processing"
+            "fix/payment-processing"
         );
         // "test" keyword triggers test/ prefix
         assert_eq!(
             task_to_branch_name("Add comprehensive test coverage"),
-            "test/add-comprehensive-test-coverage"
+            "test/comprehensive-coverage"
         );
         // "doc" keyword triggers docs/ prefix
         assert_eq!(
             task_to_branch_name("Update API documentation"),
-            "docs/update-api-documentation"
+            "docs/api-documentation"
         );
-        // Simple feature without keywords
+        // Simple feature - "add" is filtered out
         assert_eq!(
             task_to_branch_name("Add user authentication"),
-            "feature/add-user-authentication"
+            "feature/user-authentication"
+        );
+        // Long task gets truncated
+        assert_eq!(
+            task_to_branch_name("Implement a very complex feature with lots of functionality"),
+            "feature/very-complex-feature"
         );
     }
 }
