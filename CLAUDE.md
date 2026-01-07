@@ -1,89 +1,71 @@
-# Eno - Agent Orchestration Tool
+# Eno Agent Context
 
-Like the composer Brian Eno, this tool is minimalist and simple.
+You are **Agent 1** of **2** in a coordinated eno swarm session.
 
-## Overview
+## Your Task
 
-Eno orchestrates parallel AI coding agents with isolated worktrees, resource coordination, and tmux-based workflow.
+add mit license
 
-## Architecture
+## Git Branch
 
-```
-src/
-├── main.rs           # Entry point and command dispatch
-├── cli.rs            # Clap CLI definitions
-├── config.rs         # Configuration types (YAML parsing)
-├── error.rs          # Error types (thiserror)
-├── git.rs            # Git worktree management
-├── tmux.rs           # Tmux session/window management
-├── session.rs        # Session state persistence (JSON)
-├── coordinator.rs    # Resource allocation (ports, docker)
-├── context.rs        # Context file generation (CLAUDE.md injection)
-└── commands/
-    ├── mod.rs
-    ├── start.rs      # Create new swarm session
-    ├── status.rs     # Show session status
-    ├── send.rs       # Send/broadcast messages
-    ├── lock.rs       # Resource locking
-    ├── attach.rs     # Attach to tmux
-    └── cleanup.rs    # Remove session resources
-```
+You are working on branch: `feature/add-mit-license`
 
-## Key Concepts
+Base ref: `origin/main`
 
-### Session State
-- Stored in `/tmp/eno-sessions/<session-id>/state.json`
-- Tracks agents, worktrees, branches, port allocations
-- Persists across CLI invocations
+## Resource Allocation
 
-### Resource Isolation
-- Each agent gets a port range (default: 100 ports starting at 9100)
-- Docker prefixes prevent container naming collisions
-- Environment variables injected: `ENO_AGENT_ID`, `ENO_PORT_BASE`, etc.
+| Resource | Your Assignment |
+|----------|----------------|
+| Port range | 9100-9199 |
+| Docker prefix | `eno-1-` |
+| Compose project | `eno-agent-1` |
+| Test DB | `test_agent_1` |
 
-### Context Injection
-- `CLAUDE.md` file injected into each worktree
-- Contains task, resource allocations, coordination rules
-- Added to `.git/info/exclude` to prevent commits
+### Common Port Mappings
 
-### Locking
-- File-based locks in `<state_dir>/locks/`
-- Uses `fs2::FileExt::try_lock_exclusive()`
-- Lock info stored in JSON for display
+| Service | Port | Env Var |
+|---------|------|--------|
+| HTTP | 9100 | `$ENO_HTTP_PORT` |
+| HTTPS | 9101 | `$ENO_HTTPS_PORT` |
+| Database | 9132 | `$ENO_DB_PORT` |
+| Redis | 9179 | `$ENO_REDIS_PORT` |
 
-## Building
+## Coordination Rules
+
+1. **Ports**: Only bind to ports in your range (9100-9199)
+2. **Docker**: Prefix all container names with `eno-1-`
+3. **Shared resources**: Use locks before accessing:
+   ```bash
+   eno lock acquire integration-tests
+   # ... run tests ...
+   eno lock release integration-tests
+   ```
+
+## Other Agents (for awareness)
+
+| Agent | Tool | Task | Branch |
+|-------|------|------|--------|
+| 2 | cursor | change brian eno quote | `feature/change-brian-eno-quote` |
+
+## Session Commands
 
 ```bash
-cargo build --release
+eno status          # See all agents and their status
+eno send 2 "msg"    # Message another agent
+eno broadcast "msg" # Message all agents
+eno lock list       # View active locks
+eno lock acquire <resource>  # Acquire a lock
+eno lock release <resource>  # Release a lock
 ```
 
-## Testing
+## Environment Variables
+
+The following environment variables are available:
 
 ```bash
-cargo test
+ENO_AGENT_ID=1          # Your agent ID
+ENO_AGENT_COUNT=2       # Total number of agents
+ENO_SESSION_ID=20260107-174855  # Session identifier
+ENO_PORT_BASE=9100       # Start of your port range
+ENO_PORT_RANGE=100       # Size of your port range
 ```
-
-## Common Modifications
-
-### Adding a new command
-1. Add variant to `Commands` enum in `cli.rs`
-2. Create `commands/<name>.rs`
-3. Add to `commands/mod.rs`
-4. Handle in `main.rs` match
-
-### Adding environment variables
-Modify `ResourceCoordinator::env_for_agent()` in `coordinator.rs`
-
-### Changing context file format
-Modify `generate_context_file()` in `context.rs`
-
-## Dependencies
-
-- `clap` - CLI parsing
-- `serde` / `serde_json` / `serde_yaml` - Serialization
-- `chrono` - Date/time
-- `colored` - Terminal colors
-- `dialoguer` - Interactive prompts
-- `tabled` - Table formatting
-- `fs2` - File locking
-- `which` - Command detection
