@@ -24,8 +24,12 @@ impl ResourceCoordinator {
     /// Generate environment variables for a specific agent
     pub fn env_for_agent(&self, agent_id: usize, session: &SessionState) -> HashMap<String, String> {
         let port_base = self.port_base_for_agent(agent_id);
+        let agent = &session.agents[agent_id - 1];
 
         let mut env = HashMap::new();
+
+        // Task (used by launch command)
+        env.insert("ENO_TASK".to_string(), agent.task.clone());
 
         // Agent identification
         env.insert("ENO_AGENT_ID".to_string(), agent_id.to_string());

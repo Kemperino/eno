@@ -1,13 +1,12 @@
+use std::process::Command;
 use std::thread;
 use std::time::Duration;
 
 use chrono::Utc;
 use colored::Colorize;
-use tabled::{builder::Builder, settings::Style};
 
-use crate::coordinator::PORT_RANGE;
 use crate::error::{EnoError, Result};
-use crate::session::SessionState;
+use crate::session::{AgentState, SessionState};
 
 pub fn run_status(watch: bool, interval: u64) -> Result<()> {
     if watch {
@@ -65,36 +64,41 @@ fn print_session_status(session: &SessionState) {
     println!("Created:  {} ago", duration_str.dimmed());
     println!("Tmux:     {}", session.tmux_session.dimmed());
 
-    // Agents table
+    // Agents list
     println!("\n{}", "Agents".bold());
-
-    let mut builder = Builder::new();
-    builder.push_record(["Agent", "Tool", "Task", "Branch", "Ports"]);
+    println!();
 
     for agent in &session.agents {
-        let task_display = if agent.task.len() > 35 {
-            format!("{}...", &agent.task[..35])
+        let (status_icon, status_text, status_color) = get_agent_status(agent, &session.tmux_session);
+        let changes = get_git_changes(agent);
+
+        let task_display = if agent.task.len() > 50 {
+            format!("{}...", &agent.task[..50])
         } else {
             agent.task.clone()
         };
 
-        let branch_display = if agent.branch.len() > 25 {
-            format!("{}...", &agent.branch[..25])
-        } else {
-            agent.branch.clone()
+        // Format with fixed widths before applying color
+        let status_str = format!("{} {:7}", status_icon, status_text);
+        let status_colored = match status_color {
+            "green" => status_str.green(),
+            "yellow" => status_str.yellow(),
+            _ => status_str.normal(),
         };
 
-        builder.push_record([
-            agent.id.to_string(),
+        println!(
+            "  {} {:5}  {}  {:8}  {}",
+            format!("[{}]", agent.id).bold(),
             agent.tool.to_string(),
-            task_display,
-            branch_display,
-            format!("{}-{}", agent.port_base, agent.port_base + PORT_RANGE - 1),
-        ]);
+            status_colored,
+            changes,
+            task_display.dimmed()
+        );
     }
 
-    let table = builder.build().with(Style::rounded()).to_string();
-    println!("{}", table);
+    println!("\n{}", "Commands".dimmed());
+    println!("  {} - attach to session", "eno attach".cyan());
+    println!("  {} - commit & push agent work", "eno done <n>".cyan());
 }
 
 fn format_duration(duration: chrono::Duration) -> String {
@@ -105,5 +109,88 @@ fn format_duration(duration: chrono::Duration) -> String {
         format!("{}m {}s", secs / 60, secs % 60)
     } else {
         format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+    }
+}
+
+/// Get agent status: (icon, text, color)
+fn get_agent_status(agent: &AgentState, tmux_session: &str) -> (&'static str, &'static str, &'static str) {
+    // Check if branch has been pushed (eno done was run)
+    let pushed = Command::new("git")
+        .args(["rev-parse", "--verify", &format!("origin/{}", agent.branch)])
+        .current_dir(&agent.worktree)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if pushed {
+        return ("✓", "pushed", "green");
+    }
+
+    // Check tmux pane to see if claude/codex (node) is running
+    let window_name = agent.display_name();
+    let target = format!("{}:{}", tmux_session, window_name);
+
+    let output = Command::new("tmux")
+        .args(["list-panes", "-t", &target, "-F", "#{pane_current_command}"])
+        .output();
+
+    if let Ok(output) = output {
+        if output.status.success() {
+            let cmd = String::from_utf8_lossy(&output.stdout);
+            let cmd = cmd.trim();
+            // node = claude/codex running, zsh/bash = idle at prompt
+            if cmd == "node" {
+                return ("⚡", "working", "yellow");
+            } else if cmd == "zsh" || cmd == "bash" || cmd == "fish" {
+                return ("⏸", "idle", "dim");
+            }
+        }
+    }
+
+    ("?", "unknown", "dim")
+}
+
+/// Get git changes count (excluding eno files)
+fn get_git_changes(agent: &AgentState) -> String {
+    let output = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(&agent.worktree)
+        .output();
+
+    if let Ok(output) = output {
+        if output.status.success() {
+            let status = String::from_utf8_lossy(&output.stdout);
+            let changes: Vec<&str> = status
+                .lines()
+                .filter(|line| {
+                    let file = line.get(3..).unwrap_or("");
+                    !file.starts_with(".eno")
+                })
+                .collect();
+
+            if changes.is_empty() {
+                return "—".to_string();
+            }
+
+            // Count by type
+            let added = changes.iter().filter(|l| l.starts_with("A ") || l.starts_with("??")).count();
+            let modified = changes.iter().filter(|l| l.starts_with(" M") || l.starts_with("M ")).count();
+            let deleted = changes.iter().filter(|l| l.starts_with(" D") || l.starts_with("D ")).count();
+
+            let mut parts = Vec::new();
+            if added > 0 { parts.push(format!("+{}", added)); }
+            if modified > 0 { parts.push(format!("~{}", modified)); }
+            if deleted > 0 { parts.push(format!("-{}", deleted)); }
+
+            if parts.is_empty() {
+                format!("{} files", changes.len())
+            } else {
+                parts.join(" ")
+            }
+        } else {
+            "error".to_string()
+        }
+    } else {
+        "error".to_string()
     }
 }

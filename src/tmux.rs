@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -45,9 +46,11 @@ impl TmuxManager {
             )));
         }
 
-        // Set env vars and run command
-        for (key, value) in &first_window.env {
-            self.set_env(&first_window.name, key, value)?;
+        // Write env file and source it, then run command
+        if !first_window.env.is_empty() {
+            let env_file = first_window.working_dir.join(".eno-env");
+            self.write_env_file(&env_file, &first_window.env)?;
+            self.send_keys_to_window(&first_window.name, &format!("source {}", env_file.display()))?;
         }
         if let Some(ref cmd) = first_window.command {
             self.send_keys_to_window(&first_window.name, cmd)?;
@@ -74,8 +77,11 @@ impl TmuxManager {
             )));
         }
 
-        for (key, value) in &config.env {
-            self.set_env(&config.name, key, value)?;
+        // Write env file and source it, then run command
+        if !config.env.is_empty() {
+            let env_file = config.working_dir.join(".eno-env");
+            self.write_env_file(&env_file, &config.env)?;
+            self.send_keys_to_window(&config.name, &format!("source {}", env_file.display()))?;
         }
         if let Some(ref cmd) = config.command {
             self.send_keys_to_window(&config.name, cmd)?;
@@ -84,20 +90,28 @@ impl TmuxManager {
         Ok(())
     }
 
-    fn set_env(&self, window: &str, key: &str, value: &str) -> Result<()> {
-        let target = format!("{}:{}", self.session_name, window);
-        let env_cmd = format!("export {}='{}'", key, value);
-
-        Command::new("tmux")
-            .args(["send-keys", "-t", &target, &env_cmd, "Enter"])
-            .output()?;
+    fn write_env_file(&self, path: &PathBuf, env: &HashMap<String, String>) -> Result<()> {
+        let mut content = String::from("#!/bin/bash\n");
+        for (key, value) in env {
+            // Use heredoc syntax for values to handle any special characters
+            content.push_str(&format!(
+                "export {}=$(cat <<'__ENO_EOF__'\n{}\n__ENO_EOF__\n)\n",
+                key, value
+            ));
+        }
+        fs::write(path, content)?;
         Ok(())
     }
 
     pub fn send_keys_to_window(&self, window: &str, keys: &str) -> Result<()> {
         let target = format!("{}:{}", self.session_name, window);
+        // Use -l for literal mode to avoid tmux key interpretation issues
         Command::new("tmux")
-            .args(["send-keys", "-t", &target, keys, "Enter"])
+            .args(["send-keys", "-t", &target, "-l", keys])
+            .output()?;
+        // Send Enter separately
+        Command::new("tmux")
+            .args(["send-keys", "-t", &target, "Enter"])
             .output()?;
         Ok(())
     }
@@ -122,6 +136,34 @@ impl TmuxManager {
             }
         }
         Ok(())
+    }
+
+    /// Kill all eno-prefixed tmux sessions (for cleanup of stale sessions)
+    pub fn kill_all_eno_sessions() -> Vec<String> {
+        let mut killed = Vec::new();
+
+        // List all tmux sessions
+        let output = Command::new("tmux")
+            .args(["list-sessions", "-F", "#{session_name}"])
+            .output();
+
+        if let Ok(output) = output {
+            if output.status.success() {
+                let sessions = String::from_utf8_lossy(&output.stdout);
+                for session in sessions.lines() {
+                    if session.starts_with("eno-") {
+                        let result = Command::new("tmux")
+                            .args(["kill-session", "-t", session])
+                            .output();
+                        if result.map(|o| o.status.success()).unwrap_or(false) {
+                            killed.push(session.to_string());
+                        }
+                    }
+                }
+            }
+        }
+
+        killed
     }
 }
 

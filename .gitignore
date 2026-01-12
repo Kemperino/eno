@@ -21,3 +21,4 @@ target
 #.idea/
 
 .eno-worktrees
+minikube-darwin-arm64

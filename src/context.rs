@@ -122,8 +122,17 @@ pub fn inject_context(worktree: &Path, content: &str, filename: &str) -> Result<
     let exclude_path = worktree.join(".git").join("info").join("exclude");
     if exclude_path.exists() {
         let exclude_content = fs::read_to_string(&exclude_path)?;
+        let mut new_content = exclude_content.trim().to_string();
+        let mut changed = false;
         if !exclude_content.contains(filename) {
-            let new_content = format!("{}\n# Eno context file\n{}\n", exclude_content.trim(), filename);
+            new_content.push_str(&format!("\n# Eno files\n{}\n", filename));
+            changed = true;
+        }
+        if !exclude_content.contains(".eno-env") {
+            new_content.push_str(".eno-env\n");
+            changed = true;
+        }
+        if changed {
             fs::write(&exclude_path, new_content)?;
         }
     }

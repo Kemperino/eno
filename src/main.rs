@@ -64,6 +64,10 @@ fn main() {
             }
         }
 
+        Commands::Done { agent, message, title, body, base, no_pr } => {
+            commands::run_done(agent, message, title, body, base, no_pr)
+        }
+
         Commands::Init { force } => {
             // Initialize eno in the current repository
             let cwd = std::env::current_dir().unwrap();

@@ -30,12 +30,13 @@ pub fn run_cleanup(force: bool, keep_branches: bool) -> Result<()> {
 
     println!("\nCleaning up...\n");
 
-    // Kill tmux session
-    print!("  Killing tmux session ");
-    let tmux = TmuxManager::new(session.tmux_session.clone())?;
-    match tmux.kill_session() {
-        Ok(_) => println!("{}", "✓".green()),
-        Err(e) => println!("{} ({})", "⚠".yellow(), e),
+    // Kill all eno tmux sessions (including stale ones)
+    print!("  Killing eno tmux sessions ");
+    let killed = TmuxManager::kill_all_eno_sessions();
+    if killed.is_empty() {
+        println!("{}", "(none found)".dimmed());
+    } else {
+        println!("{} ({})", "✓".green(), killed.len());
     }
 
     // Initialize git manager

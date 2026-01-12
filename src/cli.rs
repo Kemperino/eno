@@ -104,6 +104,33 @@ pub enum Commands {
         #[arg(short, long)]
         force: bool,
     },
+
+    /// Commit, push, and create PR for agent's work
+    Done {
+        /// Agent number (auto-detects if run from worktree)
+        #[arg(value_parser = clap::value_parser!(u8).range(1..=4))]
+        agent: Option<u8>,
+
+        /// Custom commit message (default: uses task description)
+        #[arg(short, long)]
+        message: Option<String>,
+
+        /// PR title (default: @coderabbitai)
+        #[arg(long)]
+        title: Option<String>,
+
+        /// PR body (default: branch name)
+        #[arg(long)]
+        body: Option<String>,
+
+        /// Base branch for PR (default: main)
+        #[arg(long)]
+        base: Option<String>,
+
+        /// Skip PR creation
+        #[arg(long)]
+        no_pr: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
@@ -122,12 +149,11 @@ impl Tool {
         }
     }
 
-    /// Get the full launch command with the task
-    pub fn launch_command(&self, task: &str) -> String {
-        let escaped_task = task.replace("'", "'\\''");
+    /// Get the full launch command (reads task from ENO_TASK env var)
+    pub fn launch_command(&self) -> String {
         match self {
-            Tool::Claude => format!("claude --dangerously-skip-permissions '{}'", escaped_task),
-            Tool::Codex => format!("codex --dangerously-skip-permissions '{}'", escaped_task),
+            Tool::Claude => "claude --dangerously-skip-permissions \"$ENO_TASK\"".to_string(),
+            Tool::Codex => "codex --dangerously-bypass-approvals-and-sandbox \"$ENO_TASK\"".to_string(),
         }
     }
 

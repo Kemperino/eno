@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use colored::Colorize;
-use dialoguer::{theme::ColorfulTheme, Input, Select};
+use dialoguer::{theme::ColorfulTheme, Editor, Input, Select};
 
 use crate::cli::Tool;
 use crate::config::{task_to_branch_name, AgentSpec, EnoConfig};
@@ -184,7 +184,7 @@ pub fn run_start(
         first_agent.worktree.clone(),
     )
     .with_env_map(first_env)
-    .with_command(first_agent.tool.launch_command(&first_agent.task));
+    .with_command(first_agent.tool.launch_command());
 
     tmux.create_session(&first_window)?;
 
@@ -194,7 +194,7 @@ pub fn run_start(
 
         let window = WindowConfig::new(agent.display_name(), agent.worktree.clone())
             .with_env_map(env)
-            .with_command(agent.tool.launch_command(&agent.task));
+            .with_command(agent.tool.launch_command());
 
         tmux.add_window(&window)?;
     }
@@ -308,9 +308,27 @@ fn collect_agents_interactive(count: Option<u8>) -> Result<Vec<AgentSpec>> {
 
         let tool = *available[tool_index];
 
-        let task: String = Input::with_theme(&theme)
-            .with_prompt("Task")
-            .interact_text()?;
+        // Use Editor for multi-line task descriptions (supports pasting)
+        println!("  {}", "Task (opens editor, save and close when done):".dimmed());
+        let task = Editor::new()
+            .edit("# Enter task description below (delete this line)\n")?
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty() && !s.starts_with('#'))
+            .ok_or_else(|| EnoError::Config("Task description is required".to_string()))?;
+
+        // Clean up: remove comment lines and trim
+        let task: String = task
+            .lines()
+            .filter(|line| !line.trim().starts_with('#'))
+            .collect::<Vec<_>>()
+            .join(" ")
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if task.is_empty() {
+            return Err(EnoError::Config("Task description is required".to_string()));
+        }
 
         let branch = task_to_branch_name(&task);
         println!("  Branch: {}", branch.dimmed());
